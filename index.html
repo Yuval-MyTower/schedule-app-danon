@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>סידור עבודה</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; }
+  .fade { animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+  .input { border:1px solid #d1d5db; border-radius:.5rem; padding:.5rem .75rem; font-size:.875rem; outline:none; }
+  .input:focus { box-shadow:0 0 0 2px #818cf8; border-color:#818cf8; }
+  .btn-primary { background:#4f46e5; color:#fff; padding:.5rem 1rem; border-radius:.5rem; font-size:.875rem; font-weight:500; cursor:pointer; }
+  .btn-primary:hover { background:#4338ca; }
+  .btn-sm { padding:.3rem .7rem; border-radius:.375rem; font-size:.75rem; font-weight:500; cursor:pointer; }
+  .btn-danger { background:#fee2e2; color:#b91c1c; }
+  .btn-danger:hover { background:#fecaca; }
+  .btn-success { background:#16a34a; color:#fff; }
+  .btn-success:hover { background:#15803d; }
+  .btn-gray { background:#f3f4f6; color:#374151; }
+  .btn-gray:hover { background:#e5e7eb; }
+  .badge-open { background:#fef9c3; color:#854d0e; }
+  .badge-filled { background:#dcfce7; color:#166534; }
+  .tab-active { background:#4f46e5; color:#fff; }
+  .tab-inactive { color:#6b7280; }
+  .tab-inactive:hover { background:#f3f4f6; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════════════════════ -->
+<div id="page-login" class="hidden min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm fade">
+    <h1 class="text-2xl font-bold text-center text-gray-800 mb-1">סידור עבודה</h1>
+    <p class="text-center text-gray-400 text-sm mb-8">התחברות למערכת</p>
+    <form id="login-form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">שם משתמש</label>
+        <input id="login-username" type="text" required class="input w-full" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">סיסמה</label>
+        <input id="login-password" type="password" required class="input w-full" />
+      </div>
+      <p id="login-error" class="hidden text-red-600 text-sm text-center bg-red-50 rounded-lg py-2"></p>
+      <button type="submit" class="btn-primary w-full py-2.5 rounded-lg">כניסה</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══ ADMIN ══════════════════════════════════════════════════════════════════ -->
+<div id="page-admin" class="hidden">
+  <header class="bg-white shadow-sm sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-lg font-bold text-gray-800">סידור עבודה — <span id="admin-name" class="text-indigo-600"></span></h1>
+      <button onclick="logout()" class="text-sm text-gray-400 hover:text-red-500">יציאה</button>
+    </div>
+    <div class="max-w-5xl mx-auto px-4 pb-3 flex gap-1 flex-wrap">
+      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="schedule" onclick="adminTab('schedule')">לוח שיבוץ</button>
+      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="suggestions" onclick="adminTab('suggestions')">הצעות מערכת <span id="suggest-badge" class="hidden bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 mr-1"></span></button>
+      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="slots" onclick="adminTab('slots')">משבצות</button>
+      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="lecturers" onclick="adminTab('lecturers')">מרצים</button>
+      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="courses" onclick="adminTab('courses')">קורסים</button>
+    </div>
+  </header>
+
+  <div id="flash" class="hidden fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-xl shadow-lg z-50 text-sm pointer-events-none"></div>
+
+  <main class="max-w-5xl mx-auto px-4 py-6">
+
+    <!-- SCHEDULE -->
+    <div id="tab-schedule" class="hidden fade">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-base font-semibold mb-4 text-gray-800">לוח שיבוץ סופי</h2>
+        <div id="schedule-table-wrap"><p class="text-gray-400 text-center py-8">טוען...</p></div>
+      </div>
+    </div>
+
+    <!-- SUGGESTIONS -->
+    <div id="tab-suggestions" class="hidden fade">
+      <div class="mb-4 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-sm text-indigo-700">
+        המערכת מציגה לכל משבצת פתוחה את המרצים המוסמכים שסימנו זמינות בזמן המשבצת. לחצי <strong>שבץ</strong> כדי לאשר.
+      </div>
+      <div id="suggestions-list" class="space-y-4"><p class="text-gray-400 text-center py-8">טוען...</p></div>
+    </div>
+
+    <!-- SLOTS -->
+    <div id="tab-slots" class="hidden fade space-y-6">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="font-semibold mb-4 text-gray-800">הוספת משבצת</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div><label class="text-xs text-gray-500 mb-1 block">תאריך</label>
+            <input type="date" id="slot-date" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">שעת התחלה</label>
+            <input type="time" id="slot-start" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">שעת סיום</label>
+            <input type="time" id="slot-end" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">קורס</label>
+            <select id="slot-course" class="input w-full"><option value="">בחר קורס</option></select></div>
+        </div>
+        <button onclick="addSlot()" class="btn-primary">+ הוסף משבצת</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="font-semibold mb-4 text-gray-800">משבצות קיימות</h3>
+        <div id="slots-list"><p class="text-gray-400">טוען...</p></div>
+      </div>
+    </div>
+
+    <!-- LECTURERS -->
+    <div id="tab-lecturers" class="hidden fade space-y-6">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="font-semibold mb-4 text-gray-800">הוספת מרצה</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div><label class="text-xs text-gray-500 mb-1 block">שם מלא</label>
+            <input type="text" id="lec-name" placeholder="ישראל ישראלי" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">שם משתמש</label>
+            <input type="text" id="lec-username" placeholder="israel" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">סיסמה</label>
+            <input type="password" id="lec-password" placeholder="••••••" class="input w-full" /></div>
+        </div>
+        <div class="mb-3">
+          <label class="text-xs text-gray-500 mb-2 block">התמחויות</label>
+          <div id="lec-courses-check" class="flex flex-wrap gap-3"></div>
+        </div>
+        <button onclick="addLecturer()" class="btn-primary">+ הוסף מרצה</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="font-semibold mb-4 text-gray-800">מרצים רשומים</h3>
+        <div id="lecturers-list"><p class="text-gray-400">טוען...</p></div>
+      </div>
+    </div>
+
+    <!-- COURSES -->
+    <div id="tab-courses" class="hidden fade">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="font-semibold mb-4 text-gray-800">קורסים / התמחויות</h3>
+        <div class="flex gap-2 mb-6">
+          <input type="text" id="new-course" placeholder="שם הקורס" class="input max-w-xs"
+            onkeydown="if(event.key==='Enter')addCourse()" />
+          <button onclick="addCourse()" class="btn-primary">+ הוסף</button>
+        </div>
+        <div id="courses-list" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══ LECTURER ════════════════════════════════════════════════════════════════ -->
+<div id="page-lecturer" class="hidden">
+  <header class="bg-white shadow-sm sticky top-0 z-10">
+    <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg font-bold text-gray-800">סידור עבודה</h1>
+        <p class="text-xs text-gray-400" id="lecturer-name"></p>
+      </div>
+      <button onclick="logout()" class="text-sm text-gray-400 hover:text-red-500">יציאה</button>
+    </div>
+  </header>
+
+  <div id="flash-lec" class="hidden fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-xl shadow-lg z-50 text-sm pointer-events-none"></div>
+
+  <main class="max-w-2xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- השיבוצים שלי -->
+    <div id="my-assignments"></div>
+
+    <!-- הזמינות שלי -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h2 class="font-semibold text-gray-800 mb-4">הזמינות שלי</h2>
+
+      <!-- טאבים: שבועי / תאריך ספציפי -->
+      <div class="flex gap-1 mb-4">
+        <button onclick="lecTab('weekly')" id="lt-weekly"
+          class="px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 text-white transition">שבועי קבוע</button>
+        <button onclick="lecTab('date')" id="lt-date"
+          class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition">תאריך ספציפי</button>
+      </div>
+
+      <!-- הוספת זמינות שבועית -->
+      <div id="lec-form-weekly" class="space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">יום בשבוע</label>
+            <select id="avail-dow" class="input w-full">
+              <option value="0">ראשון</option><option value="1">שני</option>
+              <option value="2">שלישי</option><option value="3">רביעי</option>
+              <option value="4">חמישי</option><option value="5">שישי</option>
+              <option value="6">שבת</option>
+            </select>
+          </div>
+          <div><label class="text-xs text-gray-500 mb-1 block">משעה</label>
+            <input type="time" id="avail-start" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">עד שעה</label>
+            <input type="time" id="avail-end" class="input w-full" /></div>
+        </div>
+        <button onclick="addAvailability('weekly')" class="btn-primary btn-sm">+ הוסף זמינות שבועית</button>
+      </div>
+
+      <!-- הוספת חריגה לתאריך -->
+      <div id="lec-form-date" class="hidden space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <div><label class="text-xs text-gray-500 mb-1 block">תאריך</label>
+            <input type="date" id="avail-date" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">משעה</label>
+            <input type="time" id="avail-date-start" class="input w-full" /></div>
+          <div><label class="text-xs text-gray-500 mb-1 block">עד שעה</label>
+            <input type="time" id="avail-date-end" class="input w-full" /></div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="addAvailability('date', 1)" class="btn-primary btn-sm">+ זמין בתאריך זה</button>
+          <button onclick="addAvailability('date', 0)" class="btn-sm btn-danger">✕ לא זמין בתאריך זה</button>
+        </div>
+      </div>
+
+      <!-- רשימת זמינויות קיימות -->
+      <div id="my-avail-list" class="mt-4 space-y-2"></div>
+    </div>
+
+    <!-- המשבצות שלי (לפי התמחות) -->
+    <div>
+      <h2 class="font-semibold text-gray-700 mb-3">המשבצות הרלוונטיות אלי</h2>
+      <div id="my-slots"><p class="text-gray-400 text-center py-6">טוען...</p></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const DOW = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+// ── Utils ────────────────────────────────────────────────────────────────────
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function fmt(d) { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; }
+function fmtDay(d) { return DOW[new Date(d+'T00:00:00').getDay()]; }
+function fmtT(t) { return t.slice(0,5); }
+
+async function api(url, opts={}) {
+  try {
+    const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+    if (res.status === 401) { showLogin(); return null; }
+    return res;
+  } catch(e) {
+    console.error('Network error:', url, e);
+    return null;
+  }
+}
+
+function flash(msg, isLec=false) {
+  const el = document.getElementById(isLec ? 'flash-lec' : 'flash');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2800);
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+function showLogin() {
+  hide('page-admin'); hide('page-lecturer'); show('page-login');
+  setTimeout(() => document.getElementById('login-username').focus(), 100);
+}
+
+document.getElementById('login-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const res = await fetch('/api/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      username: document.getElementById('login-username').value,
+      password: document.getElementById('login-password').value
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const err = document.getElementById('login-error');
+    err.textContent = data.error; err.classList.remove('hidden');
+  } else {
+    if (data.role === 'admin') showAdmin(data.name);
+    else showLecturer(data.name);
+  }
+};
+
+async function logout() {
+  await fetch('/api/logout', {method:'POST'});
+  showLogin();
+}
+
+// ══ ADMIN ════════════════════════════════════════════════════════════════════
+let A = { courses:[], lecturers:[], slots:[], suggestions:[] };
+
+async function showAdmin(name) {
+  hide('page-login'); hide('page-lecturer'); show('page-admin');
+  document.getElementById('admin-name').textContent = name || '';
+  await loadAdmin();
+  adminTab('schedule');
+}
+
+async function loadAdmin() {
+  const [c,l,s,sg] = await Promise.all([
+    api('/api/admin/courses').then(r=>r?.json()),
+    api('/api/admin/lecturers').then(r=>r?.json()),
+    api('/api/admin/slots').then(r=>r?.json()),
+    api('/api/admin/suggestions').then(r=>r?.json()),
+  ]);
+  if (!c) return;
+  A = { courses: c || [], lecturers: l || [], slots: s || [], suggestions: sg || [] };
+  renderAdmin();
+}
+
+function adminTab(tab) {
+  document.querySelectorAll('.tab').forEach(b => {
+    b.classList.toggle('tab-active', b.dataset.tab===tab);
+    b.classList.toggle('tab-inactive', b.dataset.tab!==tab);
+  });
+  ['schedule','suggestions','slots','lecturers','courses'].forEach(t =>
+    document.getElementById('tab-'+t).classList.toggle('hidden', t!==tab));
+}
+
+function renderAdmin() {
+  renderSchedule(); renderSuggestions();
+  renderAdminSlots(); renderLecturers(); renderCourses();
+}
+
+// — Schedule —
+function renderSchedule() {
+  const el = document.getElementById('schedule-table-wrap');
+  if (!A.slots.length) { el.innerHTML='<p class="text-gray-400 text-center py-8">אין משבצות עדיין</p>'; return; }
+  el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm">
+    <thead><tr class="border-b text-gray-500 text-right">
+      <th class="pb-3 font-medium">יום</th><th class="pb-3 font-medium">תאריך</th>
+      <th class="pb-3 font-medium">שעות</th><th class="pb-3 font-medium">קורס</th>
+      <th class="pb-3 font-medium">מרצה</th><th class="pb-3 font-medium">סטטוס</th><th></th>
+    </tr></thead>
+    <tbody>${A.slots.map(s=>`
+      <tr class="border-b last:border-0 hover:bg-gray-50">
+        <td class="py-3 text-gray-400 text-sm">${fmtDay(s.date)}</td>
+        <td class="py-3">${fmt(s.date)}</td>
+        <td class="py-3">${fmtT(s.start_time)}–${fmtT(s.end_time)}</td>
+        <td class="py-3">${s.course_name}</td>
+        <td class="py-3 font-medium">${s.assigned_lecturer_name||'—'}</td>
+        <td class="py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${s.status==='filled'?'badge-filled':'badge-open'}">${s.status==='filled'?'מאויש':'פתוח'}</span></td>
+        <td class="py-3">${s.status==='filled'?`<button onclick="unassign(${s.id})" class="btn-sm btn-danger">ביטול</button>`:''}</td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+// — Suggestions —
+function renderSuggestions() {
+  const el = document.getElementById('suggestions-list');
+  const badge = document.getElementById('suggest-badge');
+  const openSlots = A.suggestions.filter(s => s.status==='open');
+  const withMatch = openSlots.filter(s => s.suggestions.some(l=>l.available));
+
+  badge.textContent = withMatch.length;
+  badge.classList.toggle('hidden', withMatch.length===0);
+
+  if (!A.suggestions.length) {
+    el.innerHTML='<div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-400">אין משבצות עדיין</div>';
+    return;
+  }
+
+  el.innerHTML = A.suggestions.map(slot => {
+    const sug = slot.suggestions || [];
+    const available = sug.filter(l=>l.available);
+    const notAvailable = sug.filter(l=>!l.available);
+    const isFilled = slot.status==='filled';
+
+    return `<div class="bg-white rounded-2xl shadow-sm p-5 fade">
+      <div class="flex items-start justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <span class="font-semibold">${fmtDay(slot.date)} ${fmt(slot.date)}</span>
+          <span class="text-gray-400 mx-2 text-sm">${fmtT(slot.start_time)}–${fmtT(slot.end_time)}</span>
+          <span class="text-indigo-600 font-medium">${slot.course_name}</span>
+        </div>
+        ${isFilled
+          ? `<span class="bg-green-100 text-green-700 text-xs font-medium px-3 py-1 rounded-full">✓ משובץ: ${slot.assigned_lecturer_name}</span>`
+          : available.length===0
+            ? `<span class="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full">אין מרצים זמינים</span>`
+            : `<span class="bg-indigo-100 text-indigo-600 text-xs px-3 py-1 rounded-full">${available.length} זמינים</span>`
+        }
+      </div>
+      ${!isFilled && available.length > 0 ? `
+        <div class="mb-2">
+          <p class="text-xs text-gray-500 mb-2">✅ מרצים זמינים ומוסמכים:</p>
+          <div class="flex flex-wrap gap-2">
+            ${available.map(l=>`
+              <div class="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <span class="text-sm font-medium">${l.name}</span>
+                <button onclick="assignSlot(${slot.id},${l.id})" class="btn-sm btn-success">שבץ</button>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      ${!isFilled && notAvailable.length > 0 ? `
+        <div class="mt-2">
+          <p class="text-xs text-gray-400 mb-1">⚪ מוסמכים אך לא זמינים:</p>
+          <div class="flex flex-wrap gap-1">
+            ${notAvailable.map(l=>`<span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">${l.name}</span>`).join('')}
+          </div>
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// — Admin Slots —
+function renderAdminSlots() {
+  document.getElementById('slot-course').innerHTML =
+    '<option value="">בחר קורס</option>' + A.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+
+  const el = document.getElementById('slots-list');
+  if (!A.slots.length) { el.innerHTML='<p class="text-gray-400">אין משבצות</p>'; return; }
+  el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm">
+    <thead><tr class="border-b text-gray-500 text-right">
+      <th class="pb-2 font-medium">יום</th><th class="pb-2 font-medium">תאריך</th>
+      <th class="pb-2 font-medium">שעות</th><th class="pb-2 font-medium">קורס</th>
+      <th class="pb-2 font-medium">סטטוס</th><th></th>
+    </tr></thead>
+    <tbody>${A.slots.map(s=>`
+      <tr class="border-b last:border-0 hover:bg-gray-50">
+        <td class="py-2 text-gray-400">${fmtDay(s.date)}</td>
+        <td class="py-2">${fmt(s.date)}</td>
+        <td class="py-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</td>
+        <td class="py-2">${s.course_name}</td>
+        <td class="py-2"><span class="px-2 py-0.5 rounded-full text-xs ${s.status==='filled'?'badge-filled':'badge-open'}">${s.status==='filled'?'מאויש':'פתוח'}</span></td>
+        <td class="py-2"><button onclick="deleteSlot(${s.id})" class="btn-sm btn-danger">מחק</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+// — Lecturers —
+function renderLecturers() {
+  document.getElementById('lec-courses-check').innerHTML =
+    A.courses.map(c=>`<label class="flex items-center gap-1.5 cursor-pointer text-sm">
+      <input type="checkbox" name="new-lec-course" value="${c.id}" class="rounded"> ${c.name}
+    </label>`).join('');
+
+  const el = document.getElementById('lecturers-list');
+  if (!A.lecturers.length) { el.innerHTML='<p class="text-gray-400">אין מרצים</p>'; return; }
+  el.innerHTML = A.lecturers.map(l=>`
+    <div class="border rounded-xl p-4 mb-3">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="font-medium">${l.name}</p>
+          <p class="text-xs text-gray-400">@${l.username}</p>
+          <div class="flex flex-wrap gap-1 mt-2">
+            ${l.courses.length
+              ? l.courses.map(c=>`<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs">${c.name}</span>`).join('')
+              : '<span class="text-gray-400 text-xs">ללא התמחויות</span>'}
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="toggleEdit(${l.id})" class="text-xs text-indigo-600 hover:underline">עריכה</button>
+          <button onclick="deleteLecturer(${l.id})" class="text-xs text-red-500 hover:underline">מחק</button>
+        </div>
+      </div>
+      <div id="edit-${l.id}" class="hidden mt-3 border-t pt-3">
+        <p class="text-xs text-gray-500 mb-2">עדכן התמחויות:</p>
+        <div class="flex flex-wrap gap-3 mb-3">
+          ${A.courses.map(c=>`<label class="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input type="checkbox" class="cb-${l.id} rounded" value="${c.id}" ${l.courses.some(lc=>lc.id===c.id)?'checked':''}> ${c.name}
+          </label>`).join('')}
+        </div>
+        <div class="flex gap-2">
+          <button onclick="saveCourses(${l.id})" class="btn-primary btn-sm">שמור</button>
+          <button onclick="toggleEdit(${l.id})" class="text-xs text-gray-400 hover:underline">ביטול</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleEdit(id) { document.getElementById('edit-'+id).classList.toggle('hidden'); }
+
+// — Courses —
+function renderCourses() {
+  const el = document.getElementById('courses-list');
+  if (!A.courses.length) { el.innerHTML='<p class="text-gray-400">אין קורסים</p>'; return; }
+  el.innerHTML = A.courses.map(c=>`
+    <span class="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full text-sm">
+      ${c.name}
+      <button onclick="deleteCourse(${c.id})" class="hover:text-red-600 font-bold text-base leading-none">×</button>
+    </span>`).join('');
+}
+
+// ── Admin Actions ─────────────────────────────────────────────────────────────
+async function addCourse() {
+  const inp = document.getElementById('new-course');
+  if (!inp.value.trim()) return;
+  const res = await api('/api/admin/courses', {method:'POST', body:JSON.stringify({name:inp.value.trim()})});
+  const d = await res.json();
+  if (!res.ok) { flash(d.error); return; }
+  inp.value=''; await loadAdmin(); flash('קורס נוסף');
+}
+async function deleteCourse(id) {
+  if (!confirm('למחוק?')) return;
+  await api('/api/admin/courses/'+id, {method:'DELETE'});
+  await loadAdmin(); flash('קורס נמחק');
+}
+async function addLecturer() {
+  const name=document.getElementById('lec-name').value.trim();
+  const username=document.getElementById('lec-username').value.trim();
+  const password=document.getElementById('lec-password').value;
+  const courseIds=[...document.querySelectorAll('input[name="new-lec-course"]:checked')].map(e=>+e.value);
+  if (!name||!username||!password) { flash('יש למלא שם, שם משתמש וסיסמה'); return; }
+  const res = await api('/api/admin/lecturers', {method:'POST', body:JSON.stringify({name,username,password,courseIds})});
+  const d = await res.json();
+  if (!res.ok) { flash(d.error); return; }
+  ['lec-name','lec-username','lec-password'].forEach(id=>document.getElementById(id).value='');
+  await loadAdmin(); flash('מרצה נוסף');
+}
+async function deleteLecturer(id) {
+  if (!confirm('למחוק מרצה זה?')) return;
+  await api('/api/admin/lecturers/'+id, {method:'DELETE'});
+  await loadAdmin(); flash('מרצה נמחק');
+}
+async function saveCourses(id) {
+  const courseIds=[...document.querySelectorAll('.cb-'+id+':checked')].map(e=>+e.value);
+  await api('/api/admin/lecturers/'+id+'/courses', {method:'PUT', body:JSON.stringify({courseIds})});
+  await loadAdmin(); flash('התמחויות עודכנו');
+}
+async function addSlot() {
+  const date=document.getElementById('slot-date').value;
+  const start_time=document.getElementById('slot-start').value;
+  const end_time=document.getElementById('slot-end').value;
+  const course_id=+document.getElementById('slot-course').value;
+  if (!date||!start_time||!end_time||!course_id) { flash('יש למלא את כל השדות'); return; }
+  await api('/api/admin/slots', {method:'POST', body:JSON.stringify({date,start_time,end_time,course_id})});
+  await loadAdmin(); flash('משבצת נוספה');
+}
+async function deleteSlot(id) {
+  if (!confirm('למחוק משבצת זו?')) return;
+  await api('/api/admin/slots/'+id, {method:'DELETE'});
+  await loadAdmin(); flash('משבצת נמחקה');
+}
+async function assignSlot(slotId, lecturerId) {
+  await api('/api/admin/slots/'+slotId+'/assign', {method:'POST', body:JSON.stringify({lecturer_id:lecturerId})});
+  await loadAdmin(); flash('מרצה שובץ! ✓'); adminTab('suggestions');
+}
+async function unassign(slotId) {
+  if (!confirm('לבטל שיבוץ?')) return;
+  await api('/api/admin/slots/'+slotId+'/unassign', {method:'POST'});
+  await loadAdmin(); flash('שיבוץ בוטל');
+}
+
+// ══ LECTURER ═════════════════════════════════════════════════════════════════
+async function showLecturer(name) {
+  hide('page-login'); hide('page-admin'); show('page-lecturer');
+  document.getElementById('lecturer-name').textContent = name || '';
+  lecTab('weekly');
+  await loadLecturerData();
+}
+
+function lecTab(t) {
+  document.getElementById('lt-weekly').className = `px-3 py-1.5 rounded-lg text-sm font-medium transition ${t==='weekly'?'bg-indigo-600 text-white':'text-gray-500 hover:bg-gray-100'}`;
+  document.getElementById('lt-date').className   = `px-3 py-1.5 rounded-lg text-sm font-medium transition ${t==='date'  ?'bg-indigo-600 text-white':'text-gray-500 hover:bg-gray-100'}`;
+  document.getElementById('lec-form-weekly').classList.toggle('hidden', t!=='weekly');
+  document.getElementById('lec-form-date').classList.toggle('hidden', t!=='date');
+}
+
+async function loadLecturerData() {
+  const [avail, slots] = await Promise.all([
+    api('/api/lecturer/availability').then(r=>r?.json()),
+    api('/api/lecturer/slots').then(r=>r?.json()),
+  ]);
+  if (avail) renderMyAvailability(avail);
+  if (slots) renderLecturerSlots(slots);
+}
+
+function renderMyAvailability(avail) {
+  const el = document.getElementById('my-avail-list');
+  if (!avail.length) { el.innerHTML='<p class="text-gray-400 text-sm">טרם הוגדרה זמינות</p>'; return; }
+
+  const weekly = avail.filter(a=>a.type==='weekly');
+  const dates  = avail.filter(a=>a.type==='date');
+
+  let html = '';
+  if (weekly.length) {
+    html += '<p class="text-xs text-gray-500 font-medium mb-1">זמינות שבועית:</p>';
+    html += weekly.map(a=>`
+      <div class="flex items-center justify-between bg-indigo-50 rounded-lg px-3 py-2 text-sm">
+        <span class="font-medium">יום ${DOW[a.day_of_week]}</span>
+        <span class="text-gray-600">${fmtT(a.start_time)} – ${fmtT(a.end_time)}</span>
+        <button onclick="deleteAvail(${a.id})" class="text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
+      </div>`).join('');
+  }
+  if (dates.length) {
+    html += '<p class="text-xs text-gray-500 font-medium mb-1 mt-3">חריגות לתאריך ספציפי:</p>';
+    html += dates.map(a=>`
+      <div class="flex items-center justify-between ${a.is_available?'bg-green-50':'bg-red-50'} rounded-lg px-3 py-2 text-sm">
+        <span class="font-medium">${fmtDay(a.date)} ${fmt(a.date)}</span>
+        <span class="text-gray-600">${a.is_available?fmtT(a.start_time)+' – '+fmtT(a.end_time):'לא זמין'}</span>
+        <span class="${a.is_available?'text-green-600':'text-red-500'} text-xs">${a.is_available?'זמין':'חסום'}</span>
+        <button onclick="deleteAvail(${a.id})" class="text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
+      </div>`).join('');
+  }
+  el.innerHTML = html;
+}
+
+function renderLecturerSlots(slots) {
+  // שיבוצים מאושרים
+  const confirmed = slots.filter(s=>s.status==='filled' && s.assigned_lecturer_id);
+  const el = document.getElementById('my-assignments');
+  const myId = null; // לא צריך — המרצה רואה רק המשבצות שלו
+
+  const myConfirmed = slots.filter(s=>s.status==='filled');
+  if (myConfirmed.length) {
+    el.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-2xl p-5 fade">
+      <h2 class="font-semibold text-green-800 mb-3">✓ השיבוצים שלי</h2>
+      <div class="space-y-2">
+        ${myConfirmed.filter(s=>s.assigned_lecturer_id).map(s=>`
+          <div class="flex items-center justify-between bg-white rounded-xl px-4 py-3">
+            <div>
+              <span class="font-medium text-sm">${fmtDay(s.date)} ${fmt(s.date)}</span>
+              <span class="text-gray-400 text-sm mx-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</span>
+            </div>
+            <span class="text-indigo-600 text-sm font-medium">${s.course_name}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  } else el.innerHTML='';
+
+  // כל המשבצות הרלוונטיות
+  const open = slots.filter(s=>s.status==='open');
+  const slotEl = document.getElementById('my-slots');
+  if (!open.length) {
+    slotEl.innerHTML='<div class="bg-white rounded-2xl shadow-sm p-6 text-center text-gray-400">אין משבצות פתוחות</div>';
+    return;
+  }
+  slotEl.innerHTML = `<div class="space-y-2">
+    ${open.map(s=>`
+      <div class="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between fade">
+        <div>
+          <span class="font-medium text-sm">${fmtDay(s.date)} ${fmt(s.date)}</span>
+          <span class="text-gray-400 text-sm mx-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</span>
+          <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${s.course_name}</span>
+        </div>
+        <span class="text-xs text-gray-400">הזמינות שלך תיבדק אוטומטית</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function addAvailability(type, isAvailable=1) {
+  let body = { type, is_available: isAvailable };
+  if (type==='weekly') {
+    body.day_of_week = +document.getElementById('avail-dow').value;
+    body.start_time  = document.getElementById('avail-start').value;
+    body.end_time    = document.getElementById('avail-end').value;
+    if (!body.start_time||!body.end_time) { flash('יש למלא שעות',true); return; }
+  } else {
+    body.date       = document.getElementById('avail-date').value;
+    body.start_time = document.getElementById('avail-date-start').value || '00:00';
+    body.end_time   = document.getElementById('avail-date-end').value   || '23:59';
+    if (!body.date) { flash('יש לבחור תאריך',true); return; }
+    if (isAvailable && (!document.getElementById('avail-date-start').value||!document.getElementById('avail-date-end').value)) {
+      flash('יש למלא שעות',true); return;
+    }
+  }
+  const res = await api('/api/lecturer/availability', {method:'POST', body:JSON.stringify(body)});
+  const d = await res.json();
+  if (!res.ok) { flash(d.error,true); return; }
+  await loadLecturerData();
+  flash(type==='weekly'?'זמינות שבועית נוספה!':'תאריך נוסף!', true);
+}
+
+async function deleteAvail(id) {
+  await api('/api/lecturer/availability/'+id, {method:'DELETE'});
+  await loadLecturerData(); flash('הוסר',true);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const res = await fetch('/api/me');
+  if (!res.ok) { showLogin(); return; }
+  const user = await res.json();
+  if (user.role==='admin') showAdmin(user.name);
+  else showLecturer(user.name);
+})();
+</script>
+</body>
+</html>
