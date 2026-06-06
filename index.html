@@ -487,16 +487,26 @@ function renderLecturers() {
 function toggleEdit(id) { document.getElementById('edit-'+id).classList.toggle('hidden'); }
 
 // — Courses —
-let _dragId = null, _dragEl = null;
+let _dragId = null, _dragEl = null, _selCourses = new Set();
+
+const _trashIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
 
 function renderCourses() {
   const el = document.getElementById('courses-list');
   if (!A.courses.length) { el.innerHTML='<p class="text-gray-400">אין קורסים</p>'; return; }
+  const allSel = A.courses.length > 0 && A.courses.every(c=>_selCourses.has(c.id));
+  const anySel = _selCourses.size > 0;
   el.innerHTML = `
+    ${anySel ? `<div class="flex items-center gap-3 mb-3 p-3 bg-red-50 rounded-xl border border-red-100">
+      <span class="text-sm text-red-700 font-medium">${_selCourses.size} קורסים נבחרו</span>
+      <button onclick="deleteSelectedCourses()" class="flex items-center gap-1.5 text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg transition">${_trashIcon} מחק נבחרים</button>
+      <button onclick="_selCourses.clear();renderCourses()" class="text-sm text-gray-400 hover:text-gray-600">ביטול</button>
+    </div>` : ''}
     <table class="w-full text-sm border-collapse">
       <thead>
         <tr class="border-b border-gray-200 text-gray-500 text-xs">
-          <th class="py-2 px-3 text-right font-medium w-8"></th>
+          <th class="py-2 px-3 w-8"><input type="checkbox" ${allSel?'checked':''} onchange="toggleAllCourses(this.checked)" class="rounded border-gray-300 cursor-pointer" /></th>
+          <th class="py-2 px-3 w-8"></th>
           <th class="py-2 px-3 text-right font-medium w-10">#</th>
           <th class="py-2 px-3 text-right font-medium">שם קורס</th>
           <th class="py-2 px-3 text-right font-medium w-36">סוג</th>
@@ -506,12 +516,13 @@ function renderCourses() {
       <tbody>
         ${A.courses.map((c,i)=>`
         <tr draggable="true" data-id="${c.id}"
-            class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+            class="border-b border-gray-100 ${_selCourses.has(c.id)?'bg-red-50':'hover:bg-gray-50'} transition-colors"
             ondragstart="onCDragStart(event,${c.id})"
             ondragover="onCDragOver(event)"
             ondragleave="onCDragLeave(event)"
             ondrop="onCDrop(event,${c.id})"
             ondragend="onCDragEnd(event)">
+          <td class="py-2 px-3"><input type="checkbox" ${_selCourses.has(c.id)?'checked':''} onchange="toggleCourseSelect(${c.id},this.checked)" class="rounded border-gray-300 cursor-pointer" /></td>
           <td class="py-2 px-3 text-gray-300 cursor-grab select-none text-base">☰</td>
           <td class="py-2 px-3 text-gray-400 font-mono">${i+1}</td>
           <td class="py-2 px-3">
@@ -528,11 +539,20 @@ function renderCourses() {
             </select>
           </td>
           <td class="py-2 px-3 text-center">
-            <button onclick="deleteCourse(${c.id})" class="text-gray-300 hover:text-red-500 transition text-sm font-bold">✕</button>
+            <button onclick="deleteCourse(${c.id})" class="text-gray-300 hover:text-red-500 transition">${_trashIcon}</button>
           </td>
         </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+function toggleCourseSelect(id,checked){ if(checked) _selCourses.add(id); else _selCourses.delete(id); renderCourses(); }
+function toggleAllCourses(checked){ if(checked) A.courses.forEach(c=>_selCourses.add(c.id)); else _selCourses.clear(); renderCourses(); }
+async function deleteSelectedCourses(){
+  if(!_selCourses.size) return;
+  if(!confirm(`למחוק ${_selCourses.size} קורסים?`)) return;
+  for(const id of [..._selCourses]) await api('/api/admin/courses/'+id,{method:'DELETE'});
+  _selCourses.clear(); await loadAdmin(); flash('קורסים נמחקו');
 }
 
 function onCDragStart(e,id){ _dragId=id; _dragEl=e.target.closest('tr'); e.dataTransfer.effectAllowed='move'; setTimeout(()=>_dragEl&&_dragEl.classList.add('opacity-40'),0); }
@@ -577,7 +597,7 @@ async function addCourse() {
 async function deleteCourse(id) {
   if (!confirm('למחוק?')) return;
   await api('/api/admin/courses/'+id, {method:'DELETE'});
-  await loadAdmin(); flash('קורס נמחק');
+  _selCourses.delete(id); await loadAdmin(); flash('קורס נמחק');
 }
 async function addLecturer() {
   const name=document.getElementById('lec-name').value.trim();
