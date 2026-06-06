@@ -239,7 +239,10 @@ function fmtT(t) { return t.slice(0,5); }
 
 async function api(url, opts={}) {
   try {
-    const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+    const token = localStorage.getItem('token') || '';
+    const headers = {'Content-Type':'application/json'};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(url, { headers, ...opts });
     if (res.status === 401) { showLogin(); return null; }
     return res;
   } catch(e) {
@@ -275,13 +278,14 @@ document.getElementById('login-form').onsubmit = async (e) => {
     const err = document.getElementById('login-error');
     err.textContent = data.error; err.classList.remove('hidden');
   } else {
+    localStorage.setItem('token', data.token);
     if (data.role === 'admin') showAdmin(data.name);
     else showLecturer(data.name);
   }
 };
 
 async function logout() {
-  await fetch('/api/logout', {method:'POST'});
+  localStorage.removeItem('token');
   showLogin();
 }
 
@@ -667,8 +671,8 @@ async function deleteAvail(id) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
-  const res = await fetch('/api/me');
-  if (!res.ok) { showLogin(); return; }
+  const res = await api('/api/me');
+  if (!res || !res.ok) { showLogin(); return; }
   const user = await res.json();
   if (user.role==='admin') showAdmin(user.name);
   else showLecturer(user.name);

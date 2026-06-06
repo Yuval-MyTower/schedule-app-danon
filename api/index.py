@@ -1,25 +1,30 @@
 """
-סידור עבודה — Vercel + Neon PostgreSQL
+סידור עבודה — Vercel + Supabase PostgreSQL
 """
 
 import os, bcrypt, psycopg2, psycopg2.extras
+import jwt as pyjwt
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
-from flask import Flask, request, jsonify, make_response
-from flask_jwt_extended import (
-    JWTManager, create_access_token, set_access_cookies,
-    unset_jwt_cookies, verify_jwt_in_request, get_jwt_identity
-)
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-app.config['JWT_SECRET_KEY']          = os.environ.get('JWT_SECRET', 'change-me-in-vercel')
-app.config['JWT_TOKEN_LOCATION']      = ['cookies']
-app.config['JWT_ACCESS_TOKEN_EXPIRES']= timedelta(hours=24)
-app.config['JWT_COOKIE_CSRF_PROTECT'] = False
-app.config['JWT_COOKIE_SECURE']       = bool(os.environ.get('VERCEL'))
-app.config['JWT_COOKIE_SAMESITE']     = 'Lax'
-jwt = JWTManager(app)
+
+JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me-in-vercel')
+JWT_EXPIRY_HOURS = 24
+
+def create_token(payload):
+    data = dict(payload)
+    data['exp'] = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS)
+    return pyjwt.encode(data, JWT_SECRET, algorithm='HS256')
+
+def verify_token():
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer '):
+        raise Exception('no token')
+    token = auth.split(' ', 1)[1]
+    return pyjwt.decode(token, JWT_SECRET, algorithms=['HS256'])
 
 DOW_NAMES = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']
 
@@ -108,8 +113,7 @@ def require_auth(role=None):
         @wraps(f)
         def wrapper(*args, **kwargs):
             try:
-                verify_jwt_in_request()
-                user = get_jwt_identity()
+                user = verify_token()
             except Exception:
                 return jsonify(error='לא מחובר'), 401
             if role and user.get('role') != role:
@@ -130,22 +134,17 @@ def login():
     if isinstance(stored, str): stored = stored.encode()
     if not bcrypt.checkpw(d.get('password','').encode(), stored):
         return jsonify(error='שם משתמש או סיסמה שגויים'), 401
-    token = create_access_token(identity={'id':user['id'],'name':user['name'],'username':user['username'],'role':user['role']})
-    res = make_response(jsonify(role=user['role'], name=user['name']))
-    set_access_cookies(res, token)
-    return res
+    token = create_token({'id':user['id'],'name':user['name'],'username':user['username'],'role':user['role']})
+    return jsonify(role=user['role'], name=user['name'], token=token)
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    res = make_response(jsonify(ok=True))
-    unset_jwt_cookies(res)
-    return res
+    return jsonify(ok=True)
 
 @app.route('/api/me')
 def me():
     try:
-        verify_jwt_in_request()
-        u = get_jwt_identity()
+        u = verify_token()
         return jsonify(id=u['id'], name=u['name'], role=u['role'])
     except Exception:
         return jsonify(error='לא מחובר'), 401
