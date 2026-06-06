@@ -66,7 +66,9 @@ def init_db():
             );
             CREATE TABLE IF NOT EXISTS courses (
                 id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE
+                name TEXT NOT NULL UNIQUE,
+                type TEXT DEFAULT 'רב תחומי',
+                sort_order INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS lecturer_courses (
                 lecturer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -93,6 +95,10 @@ def init_db():
                 is_available INTEGER DEFAULT 1
             );
         """)
+        # Migration: add columns to existing courses table
+        cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'רב תחומי'")
+        cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0")
+        cur.execute("UPDATE courses SET sort_order = id WHERE sort_order = 0 OR sort_order IS NULL")
         cur.execute("SELECT id FROM users WHERE role='admin' LIMIT 1")
         if not cur.fetchone():
             pw = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
@@ -156,20 +162,50 @@ def me():
 def get_courses(user):
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM courses ORDER BY name")
+        cur.execute("SELECT * FROM courses ORDER BY sort_order, id")
         return jsonify([dict(r) for r in cur.fetchall()])
 
 @app.route('/api/admin/courses', methods=['POST'])
 @require_auth('admin')
 def add_course(user):
-    name = (request.json or {}).get('name','').strip()
+    d = request.json or {}
+    name = d.get('name','').strip()
+    course_type = d.get('type', 'רב תחומי')
     if not name: return jsonify(error='שם חסר'), 400
     try:
         with get_db() as conn:
-            conn.cursor().execute("INSERT INTO courses(name) VALUES(%s)", (name,))
+            cur = conn.cursor()
+            cur.execute("SELECT COALESCE(MAX(sort_order),0)+1 AS next_ord FROM courses")
+            next_ord = cur.fetchone()['next_ord']
+            cur.execute("INSERT INTO courses(name,type,sort_order) VALUES(%s,%s,%s)", (name, course_type, next_ord))
         return jsonify(ok=True)
     except psycopg2.IntegrityError:
         return jsonify(error='קורס כבר קיים'), 409
+
+@app.route('/api/admin/courses/reorder', methods=['PUT'])
+@require_auth('admin')
+def reorder_courses(user):
+    ids = request.json or []
+    with get_db() as conn:
+        cur = conn.cursor()
+        for i, cid in enumerate(ids, 1):
+            cur.execute("UPDATE courses SET sort_order=%s WHERE id=%s", (i, cid))
+    return jsonify(ok=True)
+
+@app.route('/api/admin/courses/<int:cid>', methods=['PUT'])
+@require_auth('admin')
+def update_course(cid, user):
+    d = request.json or {}
+    sets, vals = [], []
+    if 'name' in d and d['name'].strip():
+        sets.append("name=%s"); vals.append(d['name'].strip())
+    if 'type' in d:
+        sets.append("type=%s"); vals.append(d['type'])
+    if not sets: return jsonify(error='אין שינויים'), 400
+    vals.append(cid)
+    with get_db() as conn:
+        conn.cursor().execute(f"UPDATE courses SET {','.join(sets)} WHERE id=%s", vals)
+    return jsonify(ok=True)
 
 @app.route('/api/admin/courses/<int:cid>', methods=['DELETE'])
 @require_auth('admin')

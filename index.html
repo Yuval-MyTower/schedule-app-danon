@@ -149,12 +149,16 @@
     <div id="tab-courses" class="hidden fade">
       <div class="bg-white rounded-2xl shadow-sm p-6">
         <h3 class="font-semibold mb-4 text-gray-800">קורסים / התמחויות</h3>
-        <div class="flex gap-2 mb-6">
+        <div class="flex gap-2 mb-6 flex-wrap items-center">
           <input type="text" id="new-course" placeholder="שם הקורס" class="input max-w-xs"
             onkeydown="if(event.key==='Enter')addCourse()" />
-          <button onclick="addCourse()" class="btn-primary">+ הוסף</button>
+          <select id="new-course-type" class="input w-auto">
+            <option value="רב תחומי">רב תחומי</option>
+            <option value="פרו">פרו</option>
+          </select>
+          <button onclick="addCourse()" class="btn-primary">+ הוסף קורס</button>
         </div>
-        <div id="courses-list" class="flex flex-wrap gap-2"></div>
+        <div id="courses-list"></div>
       </div>
     </div>
 
@@ -483,21 +487,89 @@ function renderLecturers() {
 function toggleEdit(id) { document.getElementById('edit-'+id).classList.toggle('hidden'); }
 
 // — Courses —
+let _dragId = null, _dragEl = null;
+
 function renderCourses() {
   const el = document.getElementById('courses-list');
   if (!A.courses.length) { el.innerHTML='<p class="text-gray-400">אין קורסים</p>'; return; }
-  el.innerHTML = A.courses.map(c=>`
-    <span class="flex items-center gap-2 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-full text-sm">
-      ${c.name}
-      <button onclick="deleteCourse(${c.id})" class="hover:text-red-600 font-bold text-base leading-none">×</button>
-    </span>`).join('');
+  el.innerHTML = `
+    <table class="w-full text-sm border-collapse">
+      <thead>
+        <tr class="border-b border-gray-200 text-gray-500 text-xs">
+          <th class="py-2 px-3 text-right font-medium w-8"></th>
+          <th class="py-2 px-3 text-right font-medium w-10">#</th>
+          <th class="py-2 px-3 text-right font-medium">שם קורס</th>
+          <th class="py-2 px-3 text-right font-medium w-36">סוג</th>
+          <th class="py-2 px-3 w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${A.courses.map((c,i)=>`
+        <tr draggable="true" data-id="${c.id}"
+            class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+            ondragstart="onCDragStart(event,${c.id})"
+            ondragover="onCDragOver(event)"
+            ondragleave="onCDragLeave(event)"
+            ondrop="onCDrop(event,${c.id})"
+            ondragend="onCDragEnd(event)">
+          <td class="py-2 px-3 text-gray-300 cursor-grab select-none text-base">☰</td>
+          <td class="py-2 px-3 text-gray-400 font-mono">${i+1}</td>
+          <td class="py-2 px-3">
+            <input type="text" value="${c.name.replace(/"/g,'&quot;')}"
+              class="w-full bg-transparent border border-transparent rounded px-1 py-0.5 focus:outline-none focus:border-yellow-400 focus:bg-yellow-50 transition"
+              onblur="renameCourse(${c.id},this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()" />
+          </td>
+          <td class="py-2 px-3">
+            <select onchange="updateCourseType(${c.id},this.value)"
+              class="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-yellow-400 w-full">
+              <option value="רב תחומי" ${(c.type||'רב תחומי')==='רב תחומי'?'selected':''}>רב תחומי</option>
+              <option value="פרו" ${c.type==='פרו'?'selected':''}>פרו</option>
+            </select>
+          </td>
+          <td class="py-2 px-3 text-center">
+            <button onclick="deleteCourse(${c.id})" class="text-gray-300 hover:text-red-500 transition text-sm font-bold">✕</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function onCDragStart(e,id){ _dragId=id; _dragEl=e.target.closest('tr'); e.dataTransfer.effectAllowed='move'; setTimeout(()=>_dragEl&&_dragEl.classList.add('opacity-40'),0); }
+function onCDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; const r=e.target.closest('tr'); if(r&&r!==_dragEl) r.classList.add('bg-yellow-50'); }
+function onCDragLeave(e){ const r=e.target.closest('tr'); if(r) r.classList.remove('bg-yellow-50'); }
+function onCDragEnd(e){ if(_dragEl) _dragEl.classList.remove('opacity-40'); _dragEl=null; _dragId=null; document.querySelectorAll('#courses-list tr').forEach(r=>r.classList.remove('bg-yellow-50')); }
+async function onCDrop(e,targetId){
+  e.preventDefault();
+  const r=e.target.closest('tr'); if(r) r.classList.remove('bg-yellow-50');
+  if(!_dragId||_dragId===targetId) return;
+  const fi=A.courses.findIndex(c=>c.id===_dragId), ti=A.courses.findIndex(c=>c.id===targetId);
+  if(fi===-1||ti===-1) return;
+  const [item]=A.courses.splice(fi,1); A.courses.splice(ti,0,item);
+  renderCourses();
+  await api('/api/admin/courses/reorder',{method:'PUT',body:JSON.stringify(A.courses.map(c=>c.id))});
+  flash('סדר עודכן');
+}
+async function renameCourse(id, name){
+  name=name.trim();
+  const c=A.courses.find(x=>x.id===id); if(!c||c.name===name||!name) return;
+  const res=await api('/api/admin/courses/'+id,{method:'PUT',body:JSON.stringify({name})});
+  if(res.ok){ c.name=name; flash('שם עודכן'); } else flash('שגיאה');
+}
+async function updateCourseType(id, type){
+  const c=A.courses.find(x=>x.id===id); if(!c) return;
+  await api('/api/admin/courses/'+id,{method:'PUT',body:JSON.stringify({type})});
+  c.type=type; flash('סוג עודכן');
 }
 
 // ── Admin Actions ─────────────────────────────────────────────────────────────
 async function addCourse() {
   const inp = document.getElementById('new-course');
-  if (!inp.value.trim()) return;
-  const res = await api('/api/admin/courses', {method:'POST', body:JSON.stringify({name:inp.value.trim()})});
+  const typeInp = document.getElementById('new-course-type');
+  const name = inp.value.trim();
+  if (!name) return;
+  const type = typeInp ? typeInp.value : 'רב תחומי';
+  const res = await api('/api/admin/courses', {method:'POST', body:JSON.stringify({name, type})});
   const d = await res.json();
   if (!res.ok) { flash(d.error); return; }
   inp.value=''; await loadAdmin(); flash('קורס נוסף');
