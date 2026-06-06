@@ -2,3 +2,4 @@ flask
 PyJWT
 psycopg2-binary
 bcrypt
+openpyxl

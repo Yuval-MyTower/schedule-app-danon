@@ -275,6 +275,96 @@ def unassign_slot(sid, user):
         conn.cursor().execute("UPDATE slots SET assigned_lecturer_id=NULL,status='open' WHERE id=%s", (sid,))
     return jsonify(ok=True)
 
+# ── Admin: Excel Download Template ───────────────────────────────────────────
+
+@app.route('/api/admin/slots/template', methods=['GET'])
+@require_auth('admin')
+def download_slots_template(user):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from io import BytesIO
+    from flask import send_file
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'משבצות'
+    ws.sheet_view.rightToLeft = True
+    headers = ['תאריך (DD/MM/YYYY)', 'שעת התחלה (HH:MM)', 'שעת סיום (HH:MM)', 'שם קורס']
+    for i, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(fill_type='solid', fgColor='F9D811')
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 20
+    ws.append(['01/09/2025', '08:00', '10:00', 'בישול בסיסי'])
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(bio,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name='slots_template.xlsx')
+
+# ── Admin: Excel Upload Slots ─────────────────────────────────────────────────
+
+@app.route('/api/admin/slots/upload', methods=['POST'])
+@require_auth('admin')
+def upload_slots(user):
+    from openpyxl import load_workbook
+    from io import BytesIO
+    f = request.files.get('file')
+    if not f:
+        return jsonify(error='לא נשלח קובץ'), 400
+    try:
+        wb = load_workbook(BytesIO(f.read()))
+        ws = wb.active
+    except Exception as e:
+        return jsonify(error=f'שגיאה בקריאת הקובץ: {e}'), 400
+
+    added = 0
+    skipped = 0
+    errors = []
+
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM courses")
+        courses_map = {r['name']: r['id'] for r in cur.fetchall()}
+
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not any(row):
+                continue
+            try:
+                date_raw, start_time, end_time, course_name = row[0], row[1], row[2], row[3]
+                if not all([date_raw, start_time, end_time, course_name]):
+                    skipped += 1
+                    continue
+                # Parse date DD/MM/YYYY → YYYY-MM-DD
+                date_str = str(date_raw).strip()
+                if '/' in date_str:
+                    parts = date_str.split('/')
+                    date_iso = f'{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}'
+                else:
+                    date_iso = date_str
+                start_str = str(start_time).strip()[:5]
+                end_str = str(end_time).strip()[:5]
+                course_name_str = str(course_name).strip()
+                course_id = courses_map.get(course_name_str)
+                if not course_id:
+                    errors.append(f'שורה {i}: קורס לא נמצא — {course_name_str}')
+                    skipped += 1
+                    continue
+                cur.execute(
+                    "INSERT INTO slots(date,start_time,end_time,course_id) VALUES(%s,%s,%s,%s)",
+                    (date_iso, start_str, end_str, course_id)
+                )
+                added += 1
+            except Exception as e:
+                errors.append(f'שורה {i}: {e}')
+                skipped += 1
+
+    return jsonify(added=added, skipped=skipped, errors=errors)
+
 # ── Admin: Suggestions ────────────────────────────────────────────────────────
 
 def check_avail(conn, lecturer_id, slot_date, slot_start, slot_end):
@@ -359,6 +449,24 @@ def lecturer_slots(user):
             WHERE s.course_id IN (SELECT course_id FROM lecturer_courses WHERE lecturer_id=%s)
             ORDER BY s.date,s.start_time""", (user['id'],))
         return jsonify([dict(r) for r in cur.fetchall()])
+
+# ── Logo ──────────────────────────────────────────────────────────────────────
+
+@app.route('/danon-logo.png')
+def serve_logo():
+    # Serve actual PNG if present, otherwise a branded SVG placeholder
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'danon-logo.png')
+    if os.path.exists(logo_path):
+        with open(logo_path, 'rb') as f:
+            return f.read(), 200, {'Content-Type': 'image/png'}
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">'
+        '<rect width="240" height="80" rx="10" fill="#F9D811"/>'
+        '<text x="120" y="54" font-family="Arial,sans-serif" font-size="36" font-weight="bold" '
+        'text-anchor="middle" fill="#000">דנון</text>'
+        '</svg>'
+    )
+    return svg, 200, {'Content-Type': 'image/svg+xml; charset=utf-8'}
 
 # ── Serve HTML for all non-API routes ─────────────────────────────────────────
 
