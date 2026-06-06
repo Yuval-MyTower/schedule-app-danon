@@ -25,6 +25,9 @@
   .tab-active { background:#F9D811; color:#000; }
   .tab-inactive { color:#6b7280; }
   .tab-inactive:hover { background:#f3f4f6; }
+  .nav-item { color:#6b7280; }
+  .nav-item:hover { background:#f3f4f6; }
+  .nav-active { background:#F9D811 !important; color:#000 !important; }
 </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -51,27 +54,50 @@
 </div>
 
 <!-- ══ ADMIN ══════════════════════════════════════════════════════════════════ -->
-<div id="page-admin" class="hidden">
-  <header class="bg-white shadow-sm sticky top-0 z-10">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <img src="/danon-logo.png" alt="דנון" class="h-14 w-auto object-contain" />
-        <h1 class="text-lg font-bold text-gray-800">סידור עבודה - מגמת בישול <span id="admin-name" class="text-yellow-500 text-xl font-black"></span></h1>
-      </div>
-      <button onclick="logout()" class="text-sm text-gray-400 hover:text-red-500">יציאה</button>
+<div id="page-admin" class="hidden min-h-screen flex">
+
+  <!-- SIDEBAR -->
+  <aside class="w-56 bg-white border-l border-gray-200 fixed right-0 top-0 h-full z-20 flex flex-col shadow-sm">
+    <div class="p-4 border-b border-gray-100">
+      <img src="/danon-logo.png" alt="דנון" class="h-12 w-auto object-contain mx-auto" />
     </div>
-    <div class="max-w-5xl mx-auto px-4 pb-3 flex gap-1 flex-wrap">
-      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="schedule" onclick="adminTab('schedule')">לוח שיבוץ</button>
-      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="suggestions" onclick="adminTab('suggestions')">הצעות מערכת <span id="suggest-badge" class="hidden bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 mr-1"></span></button>
-      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="slots" onclick="adminTab('slots')">משבצות</button>
-      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="lecturers" onclick="adminTab('lecturers')">מרצים</button>
-      <button class="tab px-4 py-1.5 rounded-lg text-sm font-medium transition" data-tab="courses" onclick="adminTab('courses')">קורסים</button>
+    <nav class="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <button class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition text-right" data-tab="schedule" onclick="adminTab('schedule')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+        לוח שיבוץ
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition text-right" data-tab="suggestions" onclick="adminTab('suggestions')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+        הצעות מערכת
+        <span id="suggest-badge" class="hidden bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 mr-auto leading-none"></span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition text-right" data-tab="slots" onclick="adminTab('slots')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M13.125 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-9.75 0h7.5"/></svg>
+        משבצות
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition text-right" data-tab="lecturers" onclick="adminTab('lecturers')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+        מרצים
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition text-right" data-tab="courses" onclick="adminTab('courses')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"/></svg>
+        קורסים
+      </button>
+    </nav>
+    <div class="p-3 border-t border-gray-100">
+      <p class="text-xs text-gray-400 px-3 mb-1.5 truncate font-medium" id="admin-name"></p>
+      <button onclick="logout()" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-500 hover:text-red-500 hover:bg-red-50 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" class="shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg>
+        יציאה
+      </button>
     </div>
-  </header>
+  </aside>
 
   <div id="flash" class="hidden fixed top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black px-6 py-3 rounded-xl shadow-lg z-50 text-sm pointer-events-none"></div>
 
-  <main class="max-w-5xl mx-auto px-4 py-6">
+  <!-- MAIN -->
+  <div class="flex-1 mr-56 min-h-screen">
+    <main class="max-w-4xl mx-auto px-6 py-6">
 
     <!-- SCHEDULE -->
     <div id="tab-schedule" class="hidden fade">
@@ -162,7 +188,8 @@
       </div>
     </div>
 
-  </main>
+    </main>
+  </div>
 </div>
 
 <!-- ══ LECTURER ════════════════════════════════════════════════════════════════ -->
@@ -310,7 +337,8 @@ async function showAdmin(name) {
   hide('page-login'); hide('page-lecturer'); show('page-admin');
   document.getElementById('admin-name').textContent = name || '';
   await loadAdmin();
-  adminTab('schedule');
+  const savedTab = localStorage.getItem('adminTab') || 'schedule';
+  adminTab(savedTab);
 }
 
 async function loadAdmin() {
@@ -326,9 +354,9 @@ async function loadAdmin() {
 }
 
 function adminTab(tab) {
-  document.querySelectorAll('.tab').forEach(b => {
-    b.classList.toggle('tab-active', b.dataset.tab===tab);
-    b.classList.toggle('tab-inactive', b.dataset.tab!==tab);
+  localStorage.setItem('adminTab', tab);
+  document.querySelectorAll('.nav-item').forEach(b => {
+    b.classList.toggle('nav-active', b.dataset.tab===tab);
   });
   ['schedule','suggestions','slots','lecturers','courses'].forEach(t =>
     document.getElementById('tab-'+t).classList.toggle('hidden', t!==tab));
