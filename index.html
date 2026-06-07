@@ -225,7 +225,7 @@
       </div>
 
       <div id="lec-form-weekly" class="space-y-3">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="text-xs text-gray-500 mb-1 block">יום בשבוע</label>
             <select id="avail-dow" class="input w-full">
@@ -235,22 +235,32 @@
               <option value="6">שבת</option>
             </select>
           </div>
-          <div><label class="text-xs text-gray-500 mb-1 block">משעה</label>
-            <input type="time" id="avail-start" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">עד שעה</label>
-            <input type="time" id="avail-end" class="input w-full" /></div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">משמרת</label>
+            <div class="flex gap-2">
+              <button type="button" id="shift-wkly-morning" onclick="setAvailShift('weekly','בוקר')"
+                class="pill-toggle pill-on flex-1 text-center">בוקר</button>
+              <button type="button" id="shift-wkly-afternoon" onclick="setAvailShift('weekly','אחה״צ')"
+                class="pill-toggle pill-off flex-1 text-center">אחה״צ</button>
+            </div>
+          </div>
         </div>
         <button onclick="addAvailability('weekly')" class="btn-primary btn-sm">+ הוסף זמינות שבועית</button>
       </div>
 
       <div id="lec-form-date" class="hidden space-y-3">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 gap-2">
           <div><label class="text-xs text-gray-500 mb-1 block">תאריך</label>
             <input type="date" id="avail-date" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">משעה</label>
-            <input type="time" id="avail-date-start" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">עד שעה</label>
-            <input type="time" id="avail-date-end" class="input w-full" /></div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">משמרת</label>
+            <div class="flex gap-2">
+              <button type="button" id="shift-date-morning" onclick="setAvailShift('date','בוקר')"
+                class="pill-toggle pill-on flex-1 text-center">בוקר</button>
+              <button type="button" id="shift-date-afternoon" onclick="setAvailShift('date','אחה״צ')"
+                class="pill-toggle pill-off flex-1 text-center">אחה״צ</button>
+            </div>
+          </div>
         </div>
         <div class="flex gap-2">
           <button onclick="addAvailability('date', 1)" class="btn-primary btn-sm">+ זמין בתאריך זה</button>
@@ -719,7 +729,7 @@ function renderMyAvailability(avail) {
     html += weekly.map(a=>`
       <div class="flex items-center justify-between bg-yellow-50 rounded-lg px-3 py-2 text-sm">
         <span class="font-medium">יום ${DOW[a.day_of_week]}</span>
-        <span class="text-gray-600">${fmtT(a.start_time)} – ${fmtT(a.end_time)}</span>
+        <span class="text-gray-600">${a.shift||'בוקר'}</span>
         <button onclick="deleteAvail(${a.id})" class="text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
       </div>`).join('');
   }
@@ -728,7 +738,7 @@ function renderMyAvailability(avail) {
     html += dates.map(a=>`
       <div class="flex items-center justify-between ${a.is_available?'bg-green-50':'bg-red-50'} rounded-lg px-3 py-2 text-sm">
         <span class="font-medium">${fmtDay(a.date)} ${fmt(a.date)}</span>
-        <span class="text-gray-600">${a.is_available?fmtT(a.start_time)+' – '+fmtT(a.end_time):'לא זמין'}</span>
+        <span class="text-gray-600">${a.is_available?(a.shift||'בוקר'):'לא זמין'}</span>
         <span class="${a.is_available?'text-green-600':'text-red-500'} text-xs">${a.is_available?'זמין':'חסום'}</span>
         <button onclick="deleteAvail(${a.id})" class="text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
       </div>`).join('');
@@ -774,21 +784,22 @@ function renderLecturerSlots(slots) {
   </div>`;
 }
 
+let _availShift = { weekly: 'בוקר', date: 'בוקר' };
+
+function setAvailShift(form, s) {
+  _availShift[form] = s;
+  const prefix = form === 'weekly' ? 'wkly' : 'date';
+  document.getElementById(`shift-${prefix}-morning`).className   = 'pill-toggle flex-1 text-center ' + (s==='בוקר'  ? 'pill-on' : 'pill-off');
+  document.getElementById(`shift-${prefix}-afternoon`).className = 'pill-toggle flex-1 text-center ' + (s==='אחה״צ' ? 'pill-on' : 'pill-off');
+}
+
 async function addAvailability(type, isAvailable=1) {
-  let body = { type, is_available: isAvailable };
+  let body = { type, is_available: isAvailable, shift: _availShift[type] };
   if (type==='weekly') {
     body.day_of_week = +document.getElementById('avail-dow').value;
-    body.start_time  = document.getElementById('avail-start').value;
-    body.end_time    = document.getElementById('avail-end').value;
-    if (!body.start_time||!body.end_time) { flash('יש למלא שעות',true); return; }
   } else {
-    body.date       = document.getElementById('avail-date').value;
-    body.start_time = document.getElementById('avail-date-start').value || '00:00';
-    body.end_time   = document.getElementById('avail-date-end').value   || '23:59';
+    body.date = document.getElementById('avail-date').value;
     if (!body.date) { flash('יש לבחור תאריך',true); return; }
-    if (isAvailable && (!document.getElementById('avail-date-start').value||!document.getElementById('avail-date-end').value)) {
-      flash('יש למלא שעות',true); return;
-    }
   }
   const res = await api('/api/lecturer/availability', {method:'POST', body:JSON.stringify(body)});
   const d = await res.json();

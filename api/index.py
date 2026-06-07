@@ -99,6 +99,7 @@ def init_db():
         cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'רב תחומי'")
         cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0")
         cur.execute("ALTER TABLE slots ADD COLUMN IF NOT EXISTS shift TEXT DEFAULT 'בוקר'")
+        cur.execute("ALTER TABLE lecturer_availability ADD COLUMN IF NOT EXISTS shift TEXT DEFAULT 'בוקר'")
         cur.execute("UPDATE courses SET sort_order = id WHERE sort_order = 0 OR sort_order IS NULL")
         cur.execute("SELECT id FROM users WHERE role='admin' LIMIT 1")
         if not cur.fetchone():
@@ -323,18 +324,17 @@ def download_slots_template(user):
     from flask import send_file
     wb = Workbook()
     ws = wb.active
-    ws.title = 'משבצות'
+    ws.title = 'שיעורים'
     ws.sheet_view.rightToLeft = True
-    headers = ['תאריך (DD/MM/YYYY)', 'שעת התחלה (HH:MM)', 'שעת סיום (HH:MM)', 'שם קורס']
+    headers = ['תאריך (DD/MM/YYYY)', 'משמרת (בוקר/אחה״צ)', 'שם שיעור']
     for i, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=i, value=h)
         cell.font = Font(bold=True)
         cell.fill = PatternFill(fill_type='solid', fgColor='F9D811')
     ws.column_dimensions['A'].width = 22
-    ws.column_dimensions['B'].width = 20
-    ws.column_dimensions['C'].width = 20
-    ws.column_dimensions['D'].width = 20
-    ws.append(['01/09/2025', '08:00', '10:00', 'בישול בסיסי'])
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 22
+    ws.append(['01/09/2025', 'בוקר', 'בישול בסיסי'])
     bio = BytesIO()
     wb.save(bio)
     bio.seek(0)
@@ -372,8 +372,8 @@ def upload_slots(user):
             if not any(row):
                 continue
             try:
-                date_raw, start_time, end_time, course_name = row[0], row[1], row[2], row[3]
-                if not all([date_raw, start_time, end_time, course_name]):
+                date_raw, shift_raw, course_name = row[0], row[1], row[2]
+                if not all([date_raw, shift_raw, course_name]):
                     skipped += 1
                     continue
                 # Parse date DD/MM/YYYY → YYYY-MM-DD
@@ -383,17 +383,20 @@ def upload_slots(user):
                     date_iso = f'{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}'
                 else:
                     date_iso = date_str
-                start_str = str(start_time).strip()[:5]
-                end_str = str(end_time).strip()[:5]
+                shift_str = str(shift_raw).strip()
+                if shift_str not in ('בוקר', 'אחה״צ'):
+                    errors.append(f'שורה {i}: משמרת לא חוקית — {shift_str} (בוקר/אחה״צ בלבד)')
+                    skipped += 1
+                    continue
                 course_name_str = str(course_name).strip()
                 course_id = courses_map.get(course_name_str)
                 if not course_id:
-                    errors.append(f'שורה {i}: קורס לא נמצא — {course_name_str}')
+                    errors.append(f'שורה {i}: שיעור לא נמצא — {course_name_str}')
                     skipped += 1
                     continue
                 cur.execute(
-                    "INSERT INTO slots(date,start_time,end_time,course_id) VALUES(%s,%s,%s,%s)",
-                    (date_iso, start_str, end_str, course_id)
+                    "INSERT INTO slots(date,start_time,end_time,course_id,shift) VALUES(%s,%s,%s,%s,%s)",
+                    (date_iso, '', '', course_id, shift_str)
                 )
                 added += 1
             except Exception as e:
@@ -404,20 +407,17 @@ def upload_slots(user):
 
 # ── Admin: Suggestions ────────────────────────────────────────────────────────
 
-def check_avail(conn, lecturer_id, slot_date, slot_start, slot_end):
+def check_avail(conn, lecturer_id, slot_date, slot_shift):
     dow = date_to_dow(slot_date)
     cur = conn.cursor()
-    cur.execute("SELECT * FROM lecturer_availability WHERE lecturer_id=%s AND type='date' AND date=%s", (lecturer_id,slot_date))
+    # date-specific rows take priority
+    cur.execute("SELECT * FROM lecturer_availability WHERE lecturer_id=%s AND type='date' AND date=%s AND shift=%s", (lecturer_id, slot_date, slot_shift))
     date_rows = cur.fetchall()
     if date_rows:
-        for e in date_rows:
-            if not e['is_available']: return False
-            if e['start_time'] <= slot_start and e['end_time'] >= slot_end: return True
-        return False
-    cur.execute("SELECT * FROM lecturer_availability WHERE lecturer_id=%s AND type='weekly' AND day_of_week=%s AND is_available=1", (lecturer_id,dow))
-    for e in cur.fetchall():
-        if e['start_time'] <= slot_start and e['end_time'] >= slot_end: return True
-    return False
+        return any(e['is_available'] for e in date_rows)
+    # fall back to weekly
+    cur.execute("SELECT 1 FROM lecturer_availability WHERE lecturer_id=%s AND type='weekly' AND day_of_week=%s AND shift=%s AND is_available=1", (lecturer_id, dow, slot_shift))
+    return cur.fetchone() is not None
 
 @app.route('/api/admin/suggestions', methods=['GET'])
 @require_auth('admin')
@@ -433,7 +433,7 @@ def get_suggestions(user):
         for slot in slots:
             sd = dict(slot)
             cur.execute("SELECT u.id,u.name FROM users u JOIN lecturer_courses lc ON lc.lecturer_id=u.id WHERE lc.course_id=%s AND u.role='lecturer' ORDER BY u.name", (slot['course_id'],))
-            suggestions = [{'id':l['id'],'name':l['name'],'available':check_avail(conn,l['id'],slot['date'],slot['start_time'],slot['end_time'])} for l in cur.fetchall()]
+            suggestions = [{'id':l['id'],'name':l['name'],'available':check_avail(conn,l['id'],slot['date'],slot.get('shift','בוקר'))} for l in cur.fetchall()]
             sd['suggestions'] = suggestions
             result.append(sd)
     return jsonify(result)
@@ -452,19 +452,21 @@ def get_my_avail(user):
 @require_auth('lecturer')
 def add_my_avail(user):
     d = request.json or {}
-    t, start, end = d.get('type'), d.get('start_time'), d.get('end_time')
+    t = d.get('type')
+    shift = d.get('shift', 'בוקר')
     is_av = d.get('is_available', 1)
-    if t not in ('weekly','date') or not start or not end: return jsonify(error='שדות חסרים'), 400
+    if t not in ('weekly','date'): return jsonify(error='שדות חסרים'), 400
+    if shift not in ('בוקר', 'אחה״צ'): return jsonify(error='משמרת לא חוקית'), 400
     with get_db() as conn:
         cur = conn.cursor()
         if t == 'weekly':
             dow = d.get('day_of_week')
             if dow is None: return jsonify(error='חסר יום'), 400
-            cur.execute("INSERT INTO lecturer_availability(lecturer_id,type,day_of_week,start_time,end_time,is_available) VALUES(%s,%s,%s,%s,%s,%s)", (user['id'],'weekly',dow,start,end,is_av))
+            cur.execute("INSERT INTO lecturer_availability(lecturer_id,type,day_of_week,start_time,end_time,shift,is_available) VALUES(%s,%s,%s,%s,%s,%s,%s)", (user['id'],'weekly',dow,'','',shift,is_av))
         else:
             date = d.get('date')
             if not date: return jsonify(error='חסר תאריך'), 400
-            cur.execute("INSERT INTO lecturer_availability(lecturer_id,type,date,start_time,end_time,is_available) VALUES(%s,%s,%s,%s,%s,%s)", (user['id'],'date',date,start,end,is_av))
+            cur.execute("INSERT INTO lecturer_availability(lecturer_id,type,date,start_time,end_time,shift,is_available) VALUES(%s,%s,%s,%s,%s,%s,%s)", (user['id'],'date',date,'','',shift,is_av))
     return jsonify(ok=True)
 
 @app.route('/api/lecturer/availability/<int:aid>', methods=['DELETE'])
@@ -479,12 +481,12 @@ def del_my_avail(aid, user):
 def lecturer_slots(user):
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("""SELECT s.id,s.date,s.start_time,s.end_time,s.status,s.assigned_lecturer_id,
+        cur.execute("""SELECT s.id,s.date,s.shift,s.status,s.assigned_lecturer_id,
             c.name as course_name,u.name as assigned_lecturer_name
             FROM slots s JOIN courses c ON c.id=s.course_id
             LEFT JOIN users u ON u.id=s.assigned_lecturer_id
             WHERE s.course_id IN (SELECT course_id FROM lecturer_courses WHERE lecturer_id=%s)
-            ORDER BY s.date,s.start_time""", (user['id'],))
+            ORDER BY s.date,s.shift""", (user['id'],))
         return jsonify([dict(r) for r in cur.fetchall()])
 
 # ── Logo ──────────────────────────────────────────────────────────────────────
