@@ -135,17 +135,22 @@
           </label>
           <span id="upload-status" class="text-sm text-gray-500"></span>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
           <div><label class="text-xs text-gray-500 mb-1 block">תאריך</label>
             <input type="date" id="slot-date" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">שעת התחלה</label>
-            <input type="time" id="slot-start" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">שעת סיום</label>
-            <input type="time" id="slot-end" class="input w-full" /></div>
-          <div><label class="text-xs text-gray-500 mb-1 block">קורס</label>
-            <select id="slot-course" class="input w-full"><option value="">בחר קורס</option></select></div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">סוג שיעור</label>
+            <div class="flex gap-2">
+              <button type="button" id="shift-morning" onclick="setShift('בוקר')"
+                class="pill-toggle pill-on flex-1 text-center">בוקר</button>
+              <button type="button" id="shift-afternoon" onclick="setShift('אחה״צ')"
+                class="pill-toggle pill-off flex-1 text-center">אחה״צ</button>
+            </div>
+          </div>
+          <div><label class="text-xs text-gray-500 mb-1 block">שיעור</label>
+            <select id="slot-course" class="input w-full"><option value="">בחר שיעור</option></select></div>
         </div>
-        <button onclick="addSlot()" class="btn-primary">+ הוסף משבצת</button>
+        <button onclick="addSlot()" class="btn-primary">+ הוסף שיעור</button>
       </div>
       <div class="bg-white rounded-2xl shadow-sm p-6">
         <h3 class="font-semibold mb-4 text-gray-800">מערכת שיעורים קיימת</h3>
@@ -375,7 +380,7 @@ function renderSchedule() {
       <tr class="border-b last:border-0 hover:bg-gray-50">
         <td class="py-3 text-gray-400 text-sm">${fmtDay(s.date)}</td>
         <td class="py-3">${fmt(s.date)}</td>
-        <td class="py-3">${fmtT(s.start_time)}–${fmtT(s.end_time)}</td>
+        <td class="py-3">${s.shift||'בוקר'}</td>
         <td class="py-3">${s.course_name}</td>
         <td class="py-3 font-medium">${s.assigned_lecturer_name||'—'}</td>
         <td class="py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${s.status==='filled'?'badge-filled':'badge-open'}">${s.status==='filled'?'מאויש':'פתוח'}</span></td>
@@ -408,7 +413,7 @@ function renderSuggestions() {
       <div class="flex items-start justify-between mb-3 flex-wrap gap-2">
         <div>
           <span class="font-semibold">${fmtDay(slot.date)} ${fmt(slot.date)}</span>
-          <span class="text-gray-400 mx-2 text-sm">${fmtT(slot.start_time)}–${fmtT(slot.end_time)}</span>
+          <span class="text-gray-400 mx-2 text-sm">${slot.shift||'בוקר'}</span>
           <span class="text-yellow-600 font-medium">${slot.course_name}</span>
         </div>
         ${isFilled
@@ -457,7 +462,7 @@ function renderAdminSlots() {
       <tr class="border-b last:border-0 hover:bg-gray-50">
         <td class="py-2 text-gray-400">${fmtDay(s.date)}</td>
         <td class="py-2">${fmt(s.date)}</td>
-        <td class="py-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</td>
+        <td class="py-2">${s.shift||'בוקר'}</td>
         <td class="py-2">${s.course_name}</td>
         <td class="py-2"><span class="px-2 py-0.5 rounded-full text-xs ${s.status==='filled'?'badge-filled':'badge-open'}">${s.status==='filled'?'מאויש':'פתוח'}</span></td>
         <td class="py-2"><button onclick="deleteSlot(${s.id})" class="btn-sm btn-danger">מחק</button></td>
@@ -649,13 +654,17 @@ async function saveCourses(id) {
   await api('/api/admin/lecturers/'+id+'/courses', {method:'PUT', body:JSON.stringify({courseIds})});
   await loadAdmin(); flash('התמחויות עודכנו');
 }
+let _slotShift = 'בוקר';
+function setShift(s) {
+  _slotShift = s;
+  document.getElementById('shift-morning').className = 'pill-toggle flex-1 text-center ' + (s==='בוקר'?'pill-on':'pill-off');
+  document.getElementById('shift-afternoon').className = 'pill-toggle flex-1 text-center ' + (s==='אחה״צ'?'pill-on':'pill-off');
+}
 async function addSlot() {
   const date=document.getElementById('slot-date').value;
-  const start_time=document.getElementById('slot-start').value;
-  const end_time=document.getElementById('slot-end').value;
   const course_id=+document.getElementById('slot-course').value;
-  if (!date||!start_time||!end_time||!course_id) { flash('יש למלא את כל השדות'); return; }
-  await api('/api/admin/slots', {method:'POST', body:JSON.stringify({date,start_time,end_time,course_id})});
+  if (!date||!course_id) { flash('יש למלא תאריך ושיעור'); return; }
+  await api('/api/admin/slots', {method:'POST', body:JSON.stringify({date,shift:_slotShift,course_id})});
   await loadAdmin(); flash('משבצת נוספה');
 }
 async function deleteSlot(id) {
@@ -738,7 +747,7 @@ function renderLecturerSlots(slots) {
           <div class="flex items-center justify-between bg-white rounded-xl px-4 py-3">
             <div>
               <span class="font-medium text-sm">${fmtDay(s.date)} ${fmt(s.date)}</span>
-              <span class="text-gray-400 text-sm mx-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</span>
+              <span class="text-gray-400 text-sm mx-2">${s.shift||'בוקר'}</span>
             </div>
             <span class="text-yellow-700 text-sm font-medium">${s.course_name}</span>
           </div>`).join('')}
@@ -757,7 +766,7 @@ function renderLecturerSlots(slots) {
       <div class="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between fade">
         <div>
           <span class="font-medium text-sm">${fmtDay(s.date)} ${fmt(s.date)}</span>
-          <span class="text-gray-400 text-sm mx-2">${fmtT(s.start_time)}–${fmtT(s.end_time)}</span>
+          <span class="text-gray-400 text-sm mx-2">${s.shift||'בוקר'}</span>
           <span class="text-xs bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded-full">${s.course_name}</span>
         </div>
         <span class="text-xs text-gray-400">הזמינות שלך תיבדק אוטומטית</span>

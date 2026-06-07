@@ -98,6 +98,7 @@ def init_db():
         # Migration: add columns to existing courses table
         cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'רב תחומי'")
         cur.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE slots ADD COLUMN IF NOT EXISTS shift TEXT DEFAULT 'בוקר'")
         cur.execute("UPDATE courses SET sort_order = id WHERE sort_order = 0 OR sort_order IS NULL")
         cur.execute("SELECT id FROM users WHERE role='admin' LIMIT 1")
         if not cur.fetchone():
@@ -282,10 +283,10 @@ def get_slots(user):
 @require_auth('admin')
 def add_slot(user):
     d = request.json or {}
-    date,start,end,cid = d.get('date'),d.get('start_time'),d.get('end_time'),d.get('course_id')
-    if not all([date,start,end,cid]): return jsonify(error='שדות חסרים'), 400
+    date,shift,cid = d.get('date'),d.get('shift','בוקר'),d.get('course_id')
+    if not all([date,cid]): return jsonify(error='שדות חסרים'), 400
     with get_db() as conn:
-        conn.cursor().execute("INSERT INTO slots(date,start_time,end_time,course_id) VALUES(%s,%s,%s,%s)", (date,start,end,cid))
+        conn.cursor().execute("INSERT INTO slots(date,start_time,end_time,course_id,shift) VALUES(%s,%s,%s,%s,%s)", (date,'','',cid,shift))
     return jsonify(ok=True)
 
 @app.route('/api/admin/slots/<int:sid>', methods=['DELETE'])
