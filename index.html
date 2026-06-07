@@ -28,6 +28,11 @@
   .nav-item { color:#6b7280; }
   .nav-item:hover { background:#f3f4f6; }
   .nav-active { background:#F9D811 !important; color:#000 !important; }
+  .pill-toggle { font-size:.75rem; padding:.25rem .75rem; border-radius:9999px; border:1.5px solid transparent; cursor:pointer; transition:all .15s; font-weight:500; line-height:1.5; }
+  .pill-off { border-color:#e5e7eb; background:#f9fafb; color:#6b7280; }
+  .pill-off:hover { border-color:#F9D811; background:#fefce8; color:#92400e; }
+  .pill-on { border-color:#F9D811; background:#F9D811; color:#000; }
+  .pill-on:hover { background:#e9ca00; border-color:#e9ca00; }
 </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -162,7 +167,7 @@
         </div>
         <div class="mb-3">
           <label class="text-xs text-gray-500 mb-2 block">התמחויות</label>
-          <div id="lec-courses-check" class="flex flex-wrap gap-3"></div>
+          <div id="lec-courses-pills" class="flex flex-wrap gap-1.5"></div>
         </div>
         <button onclick="addLecturer()" class="btn-primary">+ הוסף מרצה</button>
       </div>
@@ -474,47 +479,52 @@ function renderAdminSlots() {
 }
 
 // — Lecturers —
-function renderLecturers() {
-  document.getElementById('lec-courses-check').innerHTML =
-    A.courses.map(c=>`<label class="flex items-center gap-1.5 cursor-pointer text-sm">
-      <input type="checkbox" name="new-lec-course" value="${c.id}" class="rounded"> ${c.name}
-    </label>`).join('');
+let _newLecCourses = new Set();
 
-  const el = document.getElementById('lecturers-list');
-  if (!A.lecturers.length) { el.innerHTML='<p class="text-gray-400">אין מרצים</p>'; return; }
-  el.innerHTML = A.lecturers.map(l=>`
-    <div class="border rounded-xl p-4 mb-3">
-      <div class="flex items-start justify-between">
-        <div>
-          <p class="font-medium">${l.name}</p>
-          <p class="text-xs text-gray-400">@${l.username}</p>
-          <div class="flex flex-wrap gap-1 mt-2">
-            ${l.courses.length
-              ? l.courses.map(c=>`<span class="bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full text-xs">${c.name}</span>`).join('')
-              : '<span class="text-gray-400 text-xs">ללא התמחויות</span>'}
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="toggleEdit(${l.id})" class="text-xs text-yellow-600 hover:underline">עריכה</button>
-          <button onclick="deleteLecturer(${l.id})" class="text-xs text-red-500 hover:underline">מחק</button>
-        </div>
-      </div>
-      <div id="edit-${l.id}" class="hidden mt-3 border-t pt-3">
-        <p class="text-xs text-gray-500 mb-2">עדכן התמחויות:</p>
-        <div class="flex flex-wrap gap-3 mb-3">
-          ${A.courses.map(c=>`<label class="flex items-center gap-1.5 text-sm cursor-pointer">
-            <input type="checkbox" class="cb-${l.id} rounded" value="${c.id}" ${l.courses.some(lc=>lc.id===c.id)?'checked':''}> ${c.name}
-          </label>`).join('')}
-        </div>
-        <div class="flex gap-2">
-          <button onclick="saveCourses(${l.id})" class="btn-primary btn-sm">שמור</button>
-          <button onclick="toggleEdit(${l.id})" class="text-xs text-gray-400 hover:underline">ביטול</button>
-        </div>
-      </div>
-    </div>`).join('');
+function renderLecturerFormPills() {
+  document.getElementById('lec-courses-pills').innerHTML =
+    A.courses.map(c=>`<button type="button" onclick="toggleNewLecPill(${c.id})"
+      class="pill-toggle ${_newLecCourses.has(c.id)?'pill-on':'pill-off'}">${c.name}</button>`).join('');
 }
 
-function toggleEdit(id) { document.getElementById('edit-'+id).classList.toggle('hidden'); }
+function toggleNewLecPill(id) {
+  if (_newLecCourses.has(id)) _newLecCourses.delete(id); else _newLecCourses.add(id);
+  renderLecturerFormPills();
+}
+
+function renderLecturers() {
+  renderLecturerFormPills();
+  const el = document.getElementById('lecturers-list');
+  if (!A.lecturers.length) { el.innerHTML='<p class="text-gray-400">אין מרצים</p>'; return; }
+  el.innerHTML = A.lecturers.map(l=>{
+    const assignedIds = new Set(l.courses.map(c=>c.id));
+    return `<div class="border border-gray-100 rounded-2xl p-4 mb-3 hover:border-gray-200 transition">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <p class="font-semibold text-gray-900">${l.name}</p>
+          <p class="text-xs text-gray-400 mt-0.5">@${l.username}</p>
+        </div>
+        <button onclick="deleteLecturer(${l.id})" class="text-xs text-red-400 hover:text-red-600 transition">מחק</button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${A.courses.length
+          ? A.courses.map(c=>`<button type="button" onclick="toggleLecturerCourse(${l.id},${c.id})"
+              class="pill-toggle ${assignedIds.has(c.id)?'pill-on':'pill-off'}">${c.name}</button>`).join('')
+          : '<span class="text-xs text-gray-400">אין קורסים מוגדרים</span>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleLecturerCourse(lecId, courseId) {
+  const lec = A.lecturers.find(l=>l.id===lecId);
+  if (!lec) return;
+  const ids = new Set(lec.courses.map(c=>c.id));
+  if (ids.has(courseId)) ids.delete(courseId); else ids.add(courseId);
+  lec.courses = A.courses.filter(c=>ids.has(c.id));
+  renderLecturers();
+  await api('/api/admin/lecturers/'+lecId+'/courses', {method:'PUT', body:JSON.stringify({courseIds:[...ids]})});
+}
 
 // — Courses —
 let _dragId = null, _dragEl = null, _selCourses = new Set();
@@ -633,12 +643,13 @@ async function addLecturer() {
   const name=document.getElementById('lec-name').value.trim();
   const username=document.getElementById('lec-username').value.trim();
   const password=document.getElementById('lec-password').value;
-  const courseIds=[...document.querySelectorAll('input[name="new-lec-course"]:checked')].map(e=>+e.value);
+  const courseIds=[..._newLecCourses];
   if (!name||!username||!password) { flash('יש למלא שם, שם משתמש וסיסמה'); return; }
   const res = await api('/api/admin/lecturers', {method:'POST', body:JSON.stringify({name,username,password,courseIds})});
   const d = await res.json();
   if (!res.ok) { flash(d.error); return; }
   ['lec-name','lec-username','lec-password'].forEach(id=>document.getElementById(id).value='');
+  _newLecCourses.clear();
   await loadAdmin(); flash('מרצה נוסף');
 }
 async function deleteLecturer(id) {
